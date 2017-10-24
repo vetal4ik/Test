@@ -1,0 +1,7 @@
+pr_survey.taking_survey_controller_callback:
+  path: '/taking-survey'
+  defaults:
+    _controller: '\Drupal\pr_survey\Controller\PrSurveyTakingSurveyController::callback'
+    _title: 'Taking survey'
+  requirements:
+    _permission: 'taking survey'

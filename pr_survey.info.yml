@@ -1,0 +1,5 @@
+name: pr survey
+type: module
+description: pr survey
+core: 8.x
+package: Custom

@@ -1,0 +1,7 @@
+pr-survey.taking:
+  js:
+    js/sightiq-survey-taking.js: {}
+  dependencies:
+    - core/jquery
+    - core/jquery.once
+    - core/drupalSettings

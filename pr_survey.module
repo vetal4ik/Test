@@ -1,0 +1,136 @@
+<?php
+
+/**
+ * @file
+ * Contains pr_survey.module.
+ */
+
+use Drupal\views\Views;
+use Drupal\views\ViewExecutable;
+use Drupal\Core\Database\Database;
+use Drupal\Core\Form\FormStateInterface;
+use Drupal\pr_survey_result\Entity\SurveyResultEntity;
+use Drupal\views\Plugin\views\query\QueryPluginBase;
+use Symfony\Component\HttpFoundation\RedirectResponse;
+
+/**
+ * Implements hook_theme_registry_alter().
+ */
+function pr_survey_theme_registry_alter(&$theme_registry) {
+  if (isset($theme_registry['pr_survey_statistic'])) {
+    $theme_registry['pr_survey_statistic']['variables']['statistic'] = NULL;
+  }
+}
+
+/**
+ * Batch callback for assigning a survey to the user.
+ *
+ * @param array $options
+ *   Batch option.
+ * @param array $context
+ *   Batch context.
+ */
+function pr_survey_assign_callback($options, &$context) {
+  // Getting view result for batch.
+  $view = Views::getView($options['id']);
+  $view->setDisplay($options['current_display']);
+  $view->setArguments($options['args']);
+  $view->setExposedInput($options['exposed_raw_input']);
+
+  // Getting total count of result.
+  if (empty($context['sandbox'])) {
+    $view->get_total_rows = TRUE;
+  }
+  $view->execute();
+
+  if (empty($context['sandbox'])) {
+    $context['results']['destination'] = $options['destination'];
+    $context['results']['count'] = $context['sandbox']['progress'] = 0;
+    $context['sandbox']['max'] = $view->total_rows;
+  }
+
+  foreach ($view->result as $row) {
+    $context['results']['count']++;
+    $context['sandbox']['progress']++;
+
+    $data = array(
+      'sid' => $options['survey'],
+      'uid' => $row->uid,
+      'status' => pr_ACCESS_RESULT_NOT_STARTED,
+      'type' => 'marketing',
+      'weight' => 0,
+    );
+    $survey_result_entity = SurveyResultEntity::create($data);
+    $survey_result_entity->save();
+  }
+
+  if ($context['sandbox']['progress'] != $context['sandbox']['max']) {
+    $context['finished'] = $context['sandbox']['progress'] / $context['sandbox']['max'];
+  }
+  if (empty($view->result)) {
+    $context['finished'] = 1;
+  }
+}
+
+/**
+ * Batch finish callback.
+ *
+ * @param bool $success
+ *   True if batch finished successfully.
+ * @param array $results
+ *   Batch results.
+ * @param array $operations
+ *   Batch operations.
+ *
+ * @return \Symfony\Component\HttpFoundation\RedirectResponse
+ *   Redirect object.
+ */
+function pr_survey_assign_finished_callback($success, $results, $operations) {
+  return new RedirectResponse($results['destination']);
+}
+
+/**
+ * Implements hook_form_BASE_FORM_ID_alter().
+ */
+function pr_survey_form_node_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  if ('node_survey_edit_form' == $form_id) {
+    $form_object = $form_state->getFormObject();
+    $node = $form_object->getEntity();
+
+    // If there is at least one result of the survey,
+    // the survey will be closed for editing.
+    $connect = Database::getConnection('default');
+    $query = $connect->select('survey_result_entity', 'sr');
+    $query->fields('sr', ['id']);
+    $query->condition('sr.sid', $node->id(), '=');
+    $query->countQuery();
+    $response = $query->execute();
+    $form['field_questions']['#disabled'] = !empty($response->fetchField());
+  }
+}
+
+/**
+ * Implements hook_views_query_alter().
+ */
+function pr_survey_views_query_alter(ViewExecutable $view, QueryPluginBase $query) {
+  if ($view->id() == 'starting_surveys' && $view->current_display == 'survey_assign_page') {
+    $table = $query->getTableInfo('survey_result_entity_users_field_data');
+    $join = $table['join'];
+    $join->extra[] = [
+      'field' => 'sid',
+      'value' => reset($view->args),
+    ];
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function pr_survey_theme($existing, $type, $theme, $path) {
+  return [
+    'pr_survey' => [
+      'template' => 'pr_survey',
+      'variables' => ['type' => NULL],
+    ],
+  ];
+}
