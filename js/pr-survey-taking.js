@@ -1,10 +1,10 @@
 (function ($) {
-  Drupal.behaviors.surveyTaking = {
+  Drupal.behaviors.prSurveyTaking = {
     data: {},
     survey: undefined,
     attach: function (context, settings) {
       var self = this;
-      $('.pr-survey').once('surveyTaking').each(function () {
+      $('.pr-survey', context).once('prSurveyTaking').each(function () {
         self.survey = $(this);
         self.innitAddEvents();
         self.surveyFormEvent();
